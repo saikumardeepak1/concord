@@ -124,17 +124,25 @@ class Concord:
                     )
                     return final
 
-                # 4. Pick specialist (or clarify if unclear).
+                # 4. Pick specialist (or clarify if no specialist matches).
+                # For 'general' and 'unclear' intents we always ask one
+                # clarifying question rather than escalating. The earlier
+                # "low-conf -> escalate" path here was too broad; it caught
+                # vague messages ("Help?", "It's broken.") that just need a
+                # nudge to specify what they're asking about. Genuinely
+                # out-of-scope content reaches a specialist if it routes at
+                # all, and is then caught by the specialist's own
+                # needs_escalation signal.
                 specialist = self._specialists.get(routing.primary_intent)
                 if specialist is None:
-                    # Unclear or general intent: ask a clarifying question once.
                     outcome = Outcome.CLARIFYING
                     final = FinalResponse(
                         request_id=request.request_id,
                         response_text=(
                             "I want to make sure I route you to the right place. "
                             "Could you tell me whether your question is about billing, "
-                            "a technical issue, or your account?"
+                            "a technical issue, or your account? If it's something "
+                            "outside those areas, I'll connect you with a teammate."
                         ),
                         outcome=Outcome.CLARIFYING,
                         confidence=routing.confidence,
@@ -170,24 +178,47 @@ class Concord:
                         attempted.append(
                             f"action:{result.tool_name}:{'ok' if result.success else 'fail'}"
                         )
-                        if not result.success and result.error and "denied" in result.error:
-                            # A denied action escalates the case rather than
-                            # silently moving on.
+                        if not result.success:
+                            err = (result.error or "").lower()
+                            # Schema failures (missing/bad arguments) are
+                            # recoverable: the specialist proposed an action
+                            # without enough info from the customer. The right
+                            # response is a clarifying question, not a human
+                            # hand-off. Verifier/permission denials and tool
+                            # outages still escalate via the gate (triggers 5
+                            # and 7 in Section 4.4).
+                            if "schema validation" in err or "missing required" in err:
+                                output.needs_clarification = True
+                                if not output.clarifying_question:
+                                    output.clarifying_question = (
+                                        "Could you share a few more specifics so I can "
+                                        "help accurately? In particular, the exact amount "
+                                        "or charge date if this is about a transaction."
+                                    )
+                                break
                             output.needs_escalation = True
                             output.escalation_reason = (
                                 output.escalation_reason
-                                or f"action {result.tool_name} denied: {result.error}"
+                                or f"action {result.tool_name} failed: {result.error}"
                             )
                             break
                 output.executed_actions = executed
 
-                # 6. Escalate if needed.
-                escalate, reason = self._gate.should_escalate(
+                # 6. Escalate if any of the nine triggers fire (Section 4.4).
+                from concord.escalation.gate import GateContext
+
+                gate_ctx = GateContext(
                     routing=routing,
                     specialist_output=output,
                     attempts=1,
+                    tool_results=executed,
+                    top_retrieval_score=(
+                        output.citations[0].score if output.citations else None
+                    ),
+                    cost_micro_usd_so_far=0.0,  # cost tracking is future work
                 )
-                if escalate:
+                verdict = self._gate.evaluate(gate_ctx)
+                if verdict.escalate:
                     handoff = self._gate.build_handoff(
                         request_id=request.request_id,
                         trace_id=trace.trace_id,
@@ -195,7 +226,8 @@ class Concord:
                         routing=routing,
                         specialist_output=output,
                         attempted_steps=attempted,
-                        reason=reason,
+                        reason=verdict.reason,
+                        triggers_fired=verdict.triggers_fired,
                     )
                     outcome = Outcome.ESCALATED
                     final = self._build_escalation_response(
