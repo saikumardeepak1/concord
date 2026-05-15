@@ -2,7 +2,7 @@
 
 This document walks through how a request flows through Concord and why each
 piece exists. Every architectural choice is anchored to an ADR in
-`PROJECT_BRIEF.md` section 7.
+[`ADRS.md`](ADRS.md).
 
 ## Component map
 

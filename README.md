@@ -72,8 +72,8 @@ docs/               architecture overview, runbook, ADRs
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full walkthrough and
-[the project brief](docs/PROJECT_BRIEF.md) for the architectural decision
-records that drive every choice.
+[docs/ADRS.md](docs/ADRS.md) for the architectural decision records that
+drive every choice.
 
 ## Quick start
 
@@ -154,10 +154,10 @@ Concord ships two MCP servers (stdio transport):
 }
 ```
 
-Once configured, any MCP client (Claude Code, Claude Desktop, a custom agent)
-can search the knowledge base and take governed actions — subject to the same
-permission, verification, and audit pipeline as the orchestrator itself. There
-is no privileged path.
+Once configured, any MCP-compatible client (Claude Desktop, IDE extensions,
+custom agents) can search the knowledge base and take governed actions,
+subject to the same permission, verification, and audit pipeline as the
+orchestrator itself. There is no privileged path.
 
 ## Production deployment
 
@@ -200,8 +200,8 @@ Every step opens a span on the request's trace. The web UI surfaces it live.
 ## Why the choices are what they are
 
 Every major decision has an ADR with alternatives considered, rejection
-reasons, and what could prove it wrong. See `docs/PROJECT_BRIEF.md` sections
-4 and 7. Highlights:
+reasons, and what could prove it wrong. Full set in [docs/ADRS.md](docs/ADRS.md).
+Highlights:
 
 - **Router + specialists, not monolith.** Attention dilution and permission
   boundaries argue against one big agent.
@@ -221,8 +221,3 @@ reasons, and what could prove it wrong. See `docs/PROJECT_BRIEF.md` sections
 ## License
 
 MIT.
-
-## Acknowledgements
-
-Built against the architecture defined in `docs/PROJECT_BRIEF.md`. The brief
-is the source of truth; the code follows it.

@@ -1,8 +1,9 @@
 """Escalation gate (ADR-005, ADR-010, ADR-011).
 
-Implements the nine independent triggers documented in Section 4.4 of the
-project brief. Hard triggers fire on their own. Soft triggers (confidence,
-sentiment) only fire when two or more are present at once.
+Implements nine independent escalation triggers. Hard triggers fire on
+their own. Soft triggers (confidence, sentiment) only fire when two or more
+are present at once. The complete trigger catalog is enumerated below in
+the body of `evaluate()` so it lives next to the implementation.
 
 The gate is a pure function of its inputs: a `GateContext` snapshot built by
 the orchestrator. It returns a structured `EscalationVerdict` that records
