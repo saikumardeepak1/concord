@@ -37,6 +37,18 @@ from concord.observability.tracing import span
 _log = structlog.get_logger("concord.llm")
 _TModel = TypeVar("_TModel", bound=BaseModel)
 
+
+# Models that reject the `temperature` parameter. Opus 4.7 uses extended
+# thinking and returns 400 if temperature is provided. Keep this explicit so
+# the failure is local when Anthropic adds more models with this restriction.
+_NO_TEMPERATURE_MODELS = {
+    "claude-opus-4-7",
+}
+
+
+def _model_rejects_temperature(model_id: str) -> bool:
+    return any(model_id.startswith(prefix) for prefix in _NO_TEMPERATURE_MODELS)
+
 # Rough public-list prices per 1M tokens (USD). Update as Anthropic prices change.
 # Stored in micro-USD-per-token so a single multiplication gives micro-USD totals.
 _PRICE_INPUT_MICRO = {
@@ -108,6 +120,11 @@ class LLMClient:
         else:
             system_param = system
 
+        # Some models (e.g. Opus 4.7 with extended thinking) reject the
+        # `temperature` parameter outright. We only send it for models that
+        # still accept it. Keep the list explicit so failures are local.
+        accepts_temperature = not _model_rejects_temperature(model)
+
         async with span("llm.complete", tier=tier.value, model=model) as s:
             async for attempt in AsyncRetrying(
                 stop=stop_after_attempt(4),
@@ -116,15 +133,17 @@ class LLMClient:
                 reraise=True,
             ):
                 with attempt:
-                    resp = await self._client.messages.create(
-                        model=model,
-                        system=system_param,
-                        messages=messages,
-                        max_tokens=budget,
-                        temperature=temperature,
-                        stop_sequences=stop_sequences or [],
-                        timeout=settings.request_timeout_seconds,
-                    )
+                    kwargs: dict[str, Any] = {
+                        "model": model,
+                        "system": system_param,
+                        "messages": messages,
+                        "max_tokens": budget,
+                        "stop_sequences": stop_sequences or [],
+                        "timeout": settings.request_timeout_seconds,
+                    }
+                    if accepts_temperature:
+                        kwargs["temperature"] = temperature
+                    resp = await self._client.messages.create(**kwargs)
 
             text_parts = [b.text for b in resp.content if getattr(b, "type", None) == "text"]
             text = "".join(text_parts).strip()

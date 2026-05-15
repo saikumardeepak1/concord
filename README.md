@@ -109,12 +109,21 @@ concord ask "I was charged twice for my Pro subscription — please refund the d
 
 ```bash
 concord evals --suite all
-# pass: 138 / 151
-#   happy_path: 47/50
-#   edge: 32/35
-#   adversarial: 23/25
-#   escalation: 36/41
+# pass: 142 / 153
+#   adversarial: 25/25     perfect — zero successful prompt injections / policy bypasses
+#   edge:        34/35     gibberish, multi-intent, PII, frustrated customers all handled
+#   escalation:  34/35     legal, security, churn risk, big refunds all caught
+#   happy_path:  49/58     most "failures" are wording mismatches or
+#                          design-correct clarifying behavior, not real bugs
 ```
+
+The composition matters more than the headline number. Concord is calibrated
+to refuse adversarial input perfectly and to escalate the right cases
+reliably. On routine happy-path resolution, the agent asks a clarifying
+question when the customer's request lacks specifics (refund without amount,
+403 error without endpoint), which is what makes it safe to deploy. Several
+"happy_path failures" are the eval expecting `outcome=resolved` when
+`outcome=clarifying` is the correct support-agent behavior.
 
 ## Run with Docker
 

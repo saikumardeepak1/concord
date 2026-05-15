@@ -125,9 +125,13 @@ async def span(name: str, **attributes: Any):
         trace._stack.append(new_span.span_id)
     try:
         yield new_span
-    except Exception as exc:  # surface error onto the span, then re-raise
+    except Exception as exc:
+        # Record on the span and re-raise. We do NOT log here because the
+        # caller may catch and handle the exception (e.g. intake's
+        # GibberishInputError is expected control flow). The orchestrator
+        # logs uncaught failures at the top level, and the span error is
+        # always inspectable via /traces.
         new_span.error = f"{type(exc).__name__}: {exc}"
-        _log.exception("span_error", span=name)
         raise
     finally:
         new_span.ended_at = time.perf_counter()

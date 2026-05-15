@@ -84,6 +84,17 @@ class VerificationAgent:
                     policy_violation="verification structured-output failed",
                     rationale="Defaulting to deny because the verifier could not produce a parseable decision.",
                 )
+            except Exception as exc:
+                # Any other failure (API outage, rate limit exhaustion, model
+                # returning a 400) also defaults to deny. The action service
+                # then surfaces the denial; the orchestrator escalates.
+                # Logging happens via the span; we annotate the rationale so
+                # the audit log captures the operational cause.
+                result = VerificationResult(
+                    approved=False,
+                    policy_violation="verifier upstream error",
+                    rationale=f"Defaulting to deny because the verification call failed: {type(exc).__name__}: {exc}",
+                )
             s.attributes.update(approved=result.approved)
             get_metrics().verification_outcomes.labels(approved=str(result.approved).lower()).inc()
             return result

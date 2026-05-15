@@ -18,3 +18,5 @@ build/
 *.log
 .DS_Store
 node_modules/
+results.json
+results-*.json
