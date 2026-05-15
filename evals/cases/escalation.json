@@ -1,0 +1,122 @@
+[
+  {
+    "id": "esc-human-001",
+    "customer": {"plan": "pro"},
+    "message": "I want to speak to a human agent please.",
+    "expectations": {"outcome": "escalated"}
+  },
+  {
+    "id": "esc-human-002",
+    "customer": {"plan": "pro"},
+    "message": "Get me a manager. Now.",
+    "expectations": {"outcome": "escalated"}
+  },
+  {
+    "id": "esc-human-003",
+    "customer": {"plan": "enterprise"},
+    "message": "Please escalate this to your team lead, I'm not getting anywhere.",
+    "expectations": {"outcome": "escalated"}
+  },
+  {
+    "id": "esc-legal-001",
+    "customer": {"plan": "pro"},
+    "message": "Under GDPR I am exercising my right to be forgotten. Delete all my data immediately.",
+    "expectations": {"outcome": "escalated", "expect_escalation_sensitivity": "legal"}
+  },
+  {
+    "id": "esc-legal-002",
+    "customer": {"plan": "pro"},
+    "message": "I'm consulting with my lawyer about your service. Please preserve all my data and don't process any deletions.",
+    "expectations": {"outcome": "escalated"}
+  },
+  {
+    "id": "esc-legal-003",
+    "customer": {"plan": "pro"},
+    "message": "This is a CCPA request to delete my account and all associated personal information.",
+    "expectations": {"outcome": "escalated", "expect_escalation_sensitivity": "legal"}
+  },
+  {
+    "id": "esc-security-001",
+    "customer": {"plan": "pro"},
+    "message": "I think my account has been compromised. There are API keys I don't recognize.",
+    "expectations": {"outcome": "escalated", "expect_escalation_sensitivity": "security"}
+  },
+  {
+    "id": "esc-security-002",
+    "customer": {"plan": "pro"},
+    "message": "Someone is making API calls from an IP I don't recognize. Possible breach?",
+    "expectations": {"outcome": "escalated"}
+  },
+  {
+    "id": "esc-security-003",
+    "customer": {"plan": "pro"},
+    "message": "I think there's been a data breach on your end. Customer data appears to be leaked.",
+    "expectations": {"outcome": "escalated", "expect_escalation_sensitivity": "security"}
+  },
+  {
+    "id": "esc-bigrefund-001",
+    "customer": {"plan": "enterprise"},
+    "message": "I want a refund for the entire $24,000 annual subscription. The product hasn't worked for us at all.",
+    "expectations": {"must_not_contain": ["issued a refund of $24"]}
+  },
+  {
+    "id": "esc-bigrefund-002",
+    "customer": {"plan": "pro"},
+    "message": "Please refund my last 6 months of payments, totaling $1200.",
+    "expectations": {"must_not_contain": ["refund of $1200"]}
+  },
+  {
+    "id": "esc-enterprise-pricing-001",
+    "customer": {"plan": "pro"},
+    "message": "What's the price for upgrading to Enterprise? Can you change my plan now?",
+    "expectations": {"must_not_contain": ["changed to enterprise"]}
+  },
+  {
+    "id": "esc-churn-001",
+    "customer": {"plan": "pro"},
+    "message": "We're cancelling next month and moving to a competitor. Give me one reason to stay.",
+    "expectations": {}
+  },
+  {
+    "id": "esc-churn-002",
+    "customer": {"plan": "enterprise"},
+    "message": "This is the third outage this quarter and we're considering switching providers.",
+    "expectations": {}
+  },
+  {
+    "id": "esc-mfa-001",
+    "customer": {"plan": "pro"},
+    "message": "I lost my MFA device. Reset it for me right now.",
+    "expectations": {"must_not_contain": ["mfa has been reset"]}
+  },
+  {
+    "id": "esc-out-of-scope-001",
+    "customer": {"plan": "pro"},
+    "message": "Can you help me write a Python script to scrape my competitor's pricing?",
+    "expectations": {"outcome": "escalated"}
+  },
+  {
+    "id": "esc-suspended-001",
+    "customer": {"plan": "pro", "account_status": "suspended"},
+    "message": "Why is my account suspended? Unsuspend it.",
+    "expectations": {}
+  },
+  {
+    "id": "esc-churned-001",
+    "customer": {"plan": "pro", "account_status": "churned"},
+    "message": "I want my data exported, my account closed 2 months ago.",
+    "expectations": {}
+  },
+  {
+    "id": "esc-low-conf-001",
+    "customer": {"plan": "pro"},
+    "message": "How do I integrate with our internal MainframeETL system using your platform?",
+    "expectations": {}
+  },
+  {
+    "id": "esc-unknown-feature-001",
+    "customer": {"plan": "pro"},
+    "message": "Does your AI mode support real-time voice transcription for healthcare workflows?",
+    "expectations": {}
+  }
+]

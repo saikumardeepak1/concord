@@ -1,0 +1,161 @@
+[
+  {
+    "id": "billing-001",
+    "customer": {"plan": "pro", "account_status": "active", "tenure_days": 120},
+    "message": "I was charged twice for my Pro subscription on the 5th. Can you refund the duplicate?",
+    "expectations": {"outcome": "resolved", "min_confidence": 0.6, "must_contain": ["refund"]}
+  },
+  {
+    "id": "billing-002",
+    "customer": {"plan": "pro", "account_status": "active", "tenure_days": 200},
+    "message": "Where can I download the PDF of my latest invoice?",
+    "expectations": {"outcome": "resolved", "must_contain": ["invoice"]}
+  },
+  {
+    "id": "billing-003",
+    "customer": {"plan": "free"},
+    "message": "How do I upgrade from Free to Pro?",
+    "expectations": {"outcome": "resolved", "must_contain": ["pro"]}
+  },
+  {
+    "id": "billing-004",
+    "customer": {"plan": "pro"},
+    "message": "Why was tax added to my invoice this month? It wasn't there before.",
+    "expectations": {"outcome": "resolved", "must_contain": ["tax"]}
+  },
+  {
+    "id": "billing-005",
+    "customer": {"plan": "pro"},
+    "message": "My invoice is much higher than last month. Can you tell me why?",
+    "expectations": {"outcome": "resolved", "must_contain": ["usage"]}
+  },
+  {
+    "id": "billing-006",
+    "customer": {"plan": "pro"},
+    "message": "Can I change the billing contact on my account?",
+    "expectations": {"outcome": "resolved", "must_contain": ["billing contact"]}
+  },
+  {
+    "id": "billing-007",
+    "customer": {"plan": "pro"},
+    "message": "I want to cancel my subscription. What happens to my data?",
+    "expectations": {"outcome": "resolved", "must_contain": ["30 days"]}
+  },
+  {
+    "id": "billing-008",
+    "customer": {"plan": "pro"},
+    "message": "I'd like to pause my annual subscription for a month while we restructure.",
+    "expectations": {"outcome": "resolved", "must_contain": ["pause"]}
+  },
+  {
+    "id": "billing-009",
+    "customer": {"plan": "pro"},
+    "message": "We added 3 users last week and the prorated charge looks weird. Can you explain it?",
+    "expectations": {"outcome": "resolved", "must_contain": ["prorat"]}
+  },
+  {
+    "id": "billing-010",
+    "customer": {"plan": "pro"},
+    "message": "How long does a refund take to appear on my statement?",
+    "expectations": {"outcome": "resolved", "must_contain": ["5"]}
+  },
+
+  {
+    "id": "tech-001",
+    "customer": {"plan": "pro"},
+    "message": "I'm getting 401 Unauthorized on every API call this morning. The key worked yesterday.",
+    "expectations": {"outcome": "resolved", "must_contain": ["api key"]}
+  },
+  {
+    "id": "tech-002",
+    "customer": {"plan": "pro"},
+    "message": "My webhooks stopped delivering last night. Where can I see why?",
+    "expectations": {"outcome": "resolved", "must_contain": ["delivery log"]}
+  },
+  {
+    "id": "tech-003",
+    "customer": {"plan": "pro"},
+    "message": "We are seeing 429 errors. What are your rate limits exactly?",
+    "expectations": {"outcome": "resolved", "must_contain": ["100"]}
+  },
+  {
+    "id": "tech-004",
+    "customer": {"plan": "enterprise"},
+    "message": "Getting 500s on the /events endpoint for the last 10 minutes. Is this a known issue?",
+    "expectations": {"outcome": "resolved", "must_contain": ["status"]}
+  },
+  {
+    "id": "tech-005",
+    "customer": {"plan": "pro"},
+    "message": "Should I use the Python SDK or call the REST API directly for batch jobs?",
+    "expectations": {"outcome": "resolved", "must_contain": ["sdk"]}
+  },
+  {
+    "id": "tech-006",
+    "customer": {"plan": "pro"},
+    "message": "What is the right way to retry a POST that timed out without double-charging?",
+    "expectations": {"outcome": "resolved", "must_contain": ["idempotency"]}
+  },
+  {
+    "id": "tech-007",
+    "customer": {"plan": "pro"},
+    "message": "I rotated my IdP cert and SSO logins started failing with invalid_signature.",
+    "expectations": {"outcome": "resolved", "must_contain": ["certificate"]}
+  },
+  {
+    "id": "tech-008",
+    "customer": {"plan": "pro"},
+    "message": "Events are not showing up in the dashboard but my API queries return them. What gives?",
+    "expectations": {"outcome": "resolved", "must_contain": ["index"]}
+  },
+
+  {
+    "id": "acct-001",
+    "customer": {"plan": "pro"},
+    "message": "I forgot my password and I can't log in. Can you reset it for me?",
+    "expectations": {"outcome": "resolved", "must_contain": ["reset"]}
+  },
+  {
+    "id": "acct-002",
+    "customer": {"plan": "pro"},
+    "message": "I locked myself out after too many tries. How long until I can try again?",
+    "expectations": {"outcome": "resolved", "must_contain": ["15"]}
+  },
+  {
+    "id": "acct-003",
+    "customer": {"plan": "pro"},
+    "message": "How do I invite a new teammate as an admin?",
+    "expectations": {"outcome": "resolved", "must_contain": ["invite"]}
+  },
+  {
+    "id": "acct-004",
+    "customer": {"plan": "pro"},
+    "message": "What's the difference between Admin and Owner?",
+    "expectations": {"outcome": "resolved", "must_contain": ["billing"]}
+  },
+  {
+    "id": "acct-005",
+    "customer": {"plan": "pro"},
+    "message": "We removed an employee yesterday but I'm worried their API keys are still active.",
+    "expectations": {"outcome": "resolved", "must_contain": ["revoke"]}
+  },
+
+  {
+    "id": "general-001",
+    "customer": {"plan": "free"},
+    "message": "Hi there",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "general-002",
+    "customer": {"plan": "pro"},
+    "message": "thanks, that helped!",
+    "expectations": {}
+  },
+  {
+    "id": "general-003",
+    "customer": {"plan": "enterprise"},
+    "message": "Where can I subscribe to status page updates?",
+    "expectations": {"outcome": "resolved", "must_contain": ["status"]}
+  }
+]

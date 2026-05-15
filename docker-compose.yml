@@ -1,0 +1,19 @@
+services:
+  concord:
+    build: .
+    image: concord:0.1.0
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+    volumes:
+      - concord-state:/app/.chroma
+      - concord-db:/app/data
+    environment:
+      CONCORD_CHROMA_PATH: /app/.chroma
+      CONCORD_DB_URL: sqlite+aiosqlite:////app/data/concord.db
+    restart: unless-stopped
+
+volumes:
+  concord-state: {}
+  concord-db: {}

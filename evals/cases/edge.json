@@ -1,0 +1,122 @@
+[
+  {
+    "id": "edge-ambig-001",
+    "customer": {"plan": "pro"},
+    "message": "It's broken.",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-ambig-002",
+    "customer": {"plan": "pro"},
+    "message": "Help?",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-ambig-003",
+    "customer": {"plan": "pro"},
+    "message": "I need this fixed today.",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-multi-001",
+    "customer": {"plan": "pro"},
+    "message": "I got charged twice this month AND my API is returning 500s on /events.",
+    "expectations": {"must_not_contain": ["I cannot help"]}
+  },
+  {
+    "id": "edge-multi-002",
+    "customer": {"plan": "pro"},
+    "message": "Can you reset my password and also tell me why my invoice was higher?",
+    "expectations": {}
+  },
+  {
+    "id": "edge-gibberish-001",
+    "customer": {"plan": "free"},
+    "message": "asdjkfhasdkjfh",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-gibberish-002",
+    "customer": {"plan": "free"},
+    "message": "...........",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-empty-001",
+    "customer": {"plan": "free"},
+    "message": "?",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-long-001",
+    "customer": {"plan": "pro"},
+    "message": "Hey! I've been a customer for over two years and we've generally been happy. Last week we onboarded three new users on Tuesday, and on Wednesday I noticed our API calls started failing for what felt like an hour. I checked the status page and didn't see an incident, but maybe it was too brief. Anyway, after that we got a charge on Friday that's about 40% higher than usual and I really need to understand why so I can plan next month's budget. Also, separately, one of the new users said they can't get the password reset email; I've checked their spam folder and it's not there either. Could you help with both of these things and also tell me whether the brief API failure on Wednesday counted toward your SLA? Thanks!",
+    "expectations": {"must_not_contain": ["I cannot help"]}
+  },
+  {
+    "id": "edge-non-en-001",
+    "customer": {"plan": "pro"},
+    "message": "Hola, no puedo iniciar sesión. ¿Pueden ayudarme?",
+    "expectations": {}
+  },
+  {
+    "id": "edge-pii-001",
+    "customer": {"plan": "pro"},
+    "message": "My credit card 4111 1111 1111 1111 was charged twice, please refund.",
+    "expectations": {"must_not_contain": ["4111"]}
+  },
+  {
+    "id": "edge-pii-002",
+    "customer": {"plan": "pro"},
+    "message": "Please email me at jane.doe@example.com when this is resolved.",
+    "expectations": {}
+  },
+  {
+    "id": "edge-emoji-001",
+    "customer": {"plan": "pro"},
+    "message": "😡 my refund hasn't come through!!! it's been 3 weeks!!!",
+    "expectations": {}
+  },
+  {
+    "id": "edge-typo-001",
+    "customer": {"plan": "pro"},
+    "message": "i cant logn into my acount, helpp pls",
+    "expectations": {}
+  },
+  {
+    "id": "edge-frustration-001",
+    "customer": {"plan": "pro"},
+    "message": "THIS IS RIDICULOUS. Third time I'm asking. Just fix the duplicate charge already.",
+    "expectations": {"must_contain": ["sorry"]}
+  },
+  {
+    "id": "edge-shortcut-001",
+    "customer": {"plan": "pro"},
+    "message": "refund pls",
+    "expectations": {"outcome": "clarifying"}
+  },
+  {
+    "id": "edge-unknown-product-001",
+    "customer": {"plan": "pro"},
+    "message": "Does Acme Analytics Pro v2 have a private link option?",
+    "expectations": {}
+  },
+  {
+    "id": "edge-thread-mix-001",
+    "customer": {"plan": "pro"},
+    "message": "Actually never mind the previous question, I have a different issue: my MFA stopped working.",
+    "expectations": {}
+  },
+  {
+    "id": "edge-status-pending-001",
+    "customer": {"plan": "pro", "account_status": "past_due"},
+    "message": "Why am I being asked to update my payment? I paid two weeks ago.",
+    "expectations": {}
+  },
+  {
+    "id": "edge-suspended-001",
+    "customer": {"plan": "pro", "account_status": "suspended"},
+    "message": "I forgot my password, can you reset it?",
+    "expectations": {}
+  }
+]
