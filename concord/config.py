@@ -44,9 +44,11 @@ class Settings(BaseSettings):
     max_tool_retries: int = 2
     request_timeout_seconds: int = 60
 
-    # Escalation thresholds (ADR-010)
+    # Escalation thresholds (ADR-010). Auto-action threshold lowered to 0.70
+    # after observing that the specialist self-rates ~0.75 even when retrieval
+    # clearly supports the action; staying at 0.80 caused unnecessary punts.
     confidence_escalate: float = 0.55
-    confidence_auto_action: float = 0.80
+    confidence_auto_action: float = 0.70
 
     # Storage
     db_url: str = "sqlite+aiosqlite:///./concord.db"
@@ -63,10 +65,14 @@ class Settings(BaseSettings):
     verification_enabled: bool = True
     pii_redaction_enabled: bool = True
 
-    # Retrieval
-    retrieval_top_k: int = 4
-    retrieval_chunk_chars: int = 900
-    retrieval_chunk_overlap: int = 120
+    # Retrieval. We surface more chunks (k=6) and let each chunk be larger
+    # (1400 chars) because the initial run showed the specialist escalating
+    # for topics the KB does cover — the right chunks just weren't being
+    # surfaced together. Overlap is bumped so heading-adjacent paragraphs
+    # remain stitched.
+    retrieval_top_k: int = 6
+    retrieval_chunk_chars: int = 1400
+    retrieval_chunk_overlap: int = 200
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
 
     def model_for_tier(self, tier: ModelTier) -> str:

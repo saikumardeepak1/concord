@@ -81,6 +81,12 @@ class RetrievalService:
         self._collection.upsert(ids=ids, documents=texts, metadatas=metadatas)
         return len(ids)
 
+    # Threshold below which a scoped result is considered "weak" and we expand
+    # to an unscoped search. Empirically the right chunks for in-scope queries
+    # score 0.55+; anything under 0.45 means the scoped corpus probably doesn't
+    # cover this question (usually a router-mis-classification upstream).
+    WEAK_SCORE = 0.45
+
     async def query(
         self,
         *,
@@ -88,35 +94,78 @@ class RetrievalService:
         top_k: int | None = None,
         scope: str | None = None,
     ) -> list[RetrievedPassage]:
-        """Return top-k passages, optionally restricted to a knowledge scope."""
+        """Return top-k passages with a soft scope filter.
+
+        Strategy:
+        1. If `scope` is given, run a scoped query first.
+        2. If the top scoped result is weak (below WEAK_SCORE) or there are
+           fewer than 2 results, expand: run an unscoped query and merge,
+           keeping in-scope chunks first then filling slots with the best
+           cross-scope chunks until k is reached.
+
+        This preserves the focus benefit of scoping while adding a safety net
+        for cases where the router sent the question to the wrong specialist.
+        """
         k = top_k or self._settings.retrieval_top_k
-        where = {"scope": scope} if scope else None
         async with span("retrieval.query", k=k, scope=scope) as s:
-            # Chroma's API is sync; we treat it as fast enough to call inline.
-            result = self._collection.query(
-                query_texts=[text],
-                n_results=k,
-                where=where,
-            )
-            passages: list[RetrievedPassage] = []
-            docs = (result.get("documents") or [[]])[0]
-            metas = (result.get("metadatas") or [[]])[0]
-            dists = (result.get("distances") or [[]])[0]
-            for doc, meta, dist in zip(docs, metas, dists, strict=False):
-                # Chroma cosine distance -> similarity in [0, 1] (approx).
-                score = max(0.0, 1.0 - float(dist))
-                passages.append(
-                    RetrievedPassage(
-                        doc_id=meta.get("doc_id", ""),
-                        title=meta.get("title", ""),
-                        text=doc,
-                        source=meta.get("source", ""),
-                        score=score,
-                        chunk_index=int(meta.get("chunk_index", 0)),
-                    )
-                )
+            scoped = self._raw_query(text, k, scope) if scope else []
+            cross_scope_used = False
+            if scope is None:
+                passages = self._raw_query(text, k, None)
+            elif scoped and scoped[0].score >= self.WEAK_SCORE and len(scoped) >= 2:
+                passages = scoped
+            else:
+                # Scoped results are weak or sparse. Expand to unscoped.
+                cross_scope_used = True
+                unscoped = self._raw_query(text, k, None)
+                seen: set[str] = set()
+                merged: list[RetrievedPassage] = []
+                for p in scoped + unscoped:
+                    key = f"{p.doc_id}#{p.chunk_index}"
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    merged.append(p)
+                    if len(merged) >= k:
+                        break
+                # Sort by score so the strongest cross-scope match wins if it
+                # beats the strongest in-scope one (the common router-error case).
+                merged.sort(key=lambda x: x.score, reverse=True)
+                passages = merged[:k]
+
             s.attributes["hits"] = len(passages)
+            s.attributes["cross_scope_used"] = cross_scope_used
+            if passages:
+                s.attributes["top_score"] = round(passages[0].score, 3)
             return passages
+
+    def _raw_query(
+        self, text: str, k: int, scope: str | None
+    ) -> list[RetrievedPassage]:
+        """Internal: one Chroma query, optionally scope-filtered."""
+        where = {"scope": scope} if scope else None
+        result = self._collection.query(
+            query_texts=[text],
+            n_results=k,
+            where=where,
+        )
+        passages: list[RetrievedPassage] = []
+        docs = (result.get("documents") or [[]])[0]
+        metas = (result.get("metadatas") or [[]])[0]
+        dists = (result.get("distances") or [[]])[0]
+        for doc, meta, dist in zip(docs, metas, dists, strict=False):
+            score = max(0.0, 1.0 - float(dist))
+            passages.append(
+                RetrievedPassage(
+                    doc_id=meta.get("doc_id", ""),
+                    title=meta.get("title", ""),
+                    text=doc,
+                    source=meta.get("source", ""),
+                    score=score,
+                    chunk_index=int(meta.get("chunk_index", 0)),
+                )
+            )
+        return passages
 
     def reset(self) -> None:
         self._client.reset()
