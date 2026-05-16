@@ -19,7 +19,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from concord.config import get_settings
-from concord.models import CustomerContext, SupportRequest
+from concord.customers import CustomerNotFoundError, get_directory
+from concord.models import SupportRequest
 from concord.observability.metrics import get_metrics
 from concord.orchestrator import Concord
 from concord.retrieval.service import get_retrieval_service
@@ -34,12 +35,12 @@ _traces = TraceStore()
 
 class SubmitRequest(BaseModel):
     customer_id: str
-    customer_email: str | None = None
-    plan: str = "free"
-    account_status: str = "active"
-    tenure_days: int = 0
     message: str
     conversation_id: str | None = None
+    # NOTE: plan / account_status / tenure_days are NO LONGER trusted from the
+    # request body. They come from the verified directory lookup. Demo testers
+    # cannot fake their account state by sending a different customer_id; the
+    # only valid IDs are cust-001 through cust-006 (see /customers endpoint).
 
 
 @app.on_event("startup")
@@ -68,13 +69,22 @@ async def metrics() -> Response:
 
 @app.post("/support")
 async def submit_support(req: SubmitRequest) -> JSONResponse:
-    customer = CustomerContext(
-        customer_id=req.customer_id,
-        email=req.customer_email,
-        plan=req.plan,
-        account_status=req.account_status,
-        tenure_days=req.tenure_days,
-    )
+    # Identity verification gate. In production this would validate a JWT
+    # from the chat widget against the company identity provider. In the
+    # demo we resolve against the mock directory; unknown IDs are rejected
+    # so reviewers can see the gate working.
+    try:
+        record = get_directory().verify(req.customer_id)
+    except CustomerNotFoundError as exc:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "error": "customer_not_found",
+                "message": str(exc),
+                "hint": "GET /customers for the list of valid demo customer IDs.",
+            },
+        )
+    customer = record.to_context()
     request = SupportRequest(
         customer=customer,
         message=req.message,
@@ -82,6 +92,29 @@ async def submit_support(req: SubmitRequest) -> JSONResponse:
     )
     response = await _concord.handle_request(request)
     return JSONResponse(content=response.model_dump(mode="json"))
+
+
+@app.get("/customers")
+async def list_customers() -> list[dict]:
+    """Demo helper. Returns the list of verified test customers and their
+    state. Use this in the web UI dropdown and to know which customer_id to
+    pass to /support. Not present in a real deployment — the real CRM would
+    not expose every customer over an unauthenticated endpoint.
+    """
+    directory = get_directory()
+    out: list[dict] = []
+    for cid in directory.known_customer_ids():
+        rec = directory.verify(cid)
+        out.append({
+            "customer_id": rec.customer_id,
+            "name": rec.name,
+            "email": rec.email,
+            "plan": rec.plan,
+            "account_status": rec.account_status,
+            "tenure_days": rec.tenure_days,
+            "recent_transactions": [t.to_dict() for t in rec.transactions[:5]],
+        })
+    return out
 
 
 @app.get("/traces")

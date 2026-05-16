@@ -27,7 +27,6 @@ from concord.models import (
 )
 from concord.observability.metrics import get_metrics
 
-
 # Sensitivity values that always force a hard escalation (trigger 3).
 _ALWAYS_ESCALATE = {Sensitivity.LEGAL, Sensitivity.SECURITY}
 

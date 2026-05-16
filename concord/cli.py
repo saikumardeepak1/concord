@@ -13,7 +13,8 @@ from rich.panel import Panel
 from rich.table import Table
 
 from concord.config import get_settings
-from concord.models import CustomerContext, SupportRequest
+from concord.customers import CustomerNotFoundError, get_directory
+from concord.models import SupportRequest
 from concord.orchestrator import Concord
 from concord.retrieval.service import get_retrieval_service
 from concord.state import init_db
@@ -55,19 +56,38 @@ def index_cmd(
 
 @app.command()
 def ask(
-    message: str = typer.Argument(...),
-    customer_id: str = typer.Option("demo-customer", help="Customer identifier."),
-    plan: str = typer.Option("pro"),
-    status: str = typer.Option("active"),
+    message: str = typer.Argument(..., help="The customer's message."),
+    customer_id: str = typer.Option(
+        "cust-001",
+        "--customer-id",
+        "-c",
+        help=(
+            "Verified customer ID. Valid demo IDs: cust-001 (Alice / Pro active), "
+            "cust-002 (Bob / Pro suspended), cust-003 (Carol / past-due), "
+            "cust-004 (Dave / Enterprise), cust-005 (Eve / Free), "
+            "cust-006 (Frank / churned). Any other ID is rejected at the "
+            "identity-verification gate. See `concord customers` or "
+            "docs/DEMO_SCENARIOS.md."
+        ),
+    ),
 ) -> None:
     """Submit a single support request and print the response."""
 
     async def _go() -> None:
         await init_db()
         get_retrieval_service().index_knowledge_dir()
+        try:
+            record = get_directory().verify(customer_id)
+        except CustomerNotFoundError as exc:
+            console.print(Panel.fit(
+                f"[red]Identity verification failed.[/red]\n\n{exc}",
+                title="customer_not_found",
+                border_style="red",
+            ))
+            raise typer.Exit(code=1) from None
         concord = Concord()
         request = SupportRequest(
-            customer=CustomerContext(customer_id=customer_id, plan=plan, account_status=status),
+            customer=record.to_context(),
             message=message,
         )
         response = await concord.handle_request(request)
@@ -79,9 +99,45 @@ def ask(
             table.add_row(c.source, f"{c.score:.2f}")
         if response.citations:
             console.print(table)
+        console.print(f"[dim]customer: {record.name} ({record.customer_id}) · "
+                      f"plan={record.plan} · status={record.account_status}[/dim]")
         console.print(f"[dim]trace: {response.trace_id}[/dim]")
 
     asyncio.run(_go())
+
+
+@app.command()
+def customers() -> None:
+    """List the verified demo customers and their state.
+
+    Use this to know which customer_id to pass to `concord ask -c ...`.
+    Any other customer_id is rejected at the identity-verification gate,
+    which is the demo's stand-in for what a real auth flow would enforce.
+    """
+    directory = get_directory()
+    table = Table(title="Demo customer directory", show_header=True, header_style="bold")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name")
+    table.add_column("Plan")
+    table.add_column("Status")
+    table.add_column("Tenure")
+    table.add_column("Charges")
+    for cid in directory.known_customer_ids():
+        rec = directory.verify(cid)
+        table.add_row(
+            rec.customer_id,
+            rec.name,
+            rec.plan,
+            rec.account_status,
+            f"{rec.tenure_days}d",
+            str(len(rec.transactions)),
+        )
+    console.print(table)
+    console.print(
+        "\n[dim]Any customer_id not listed above is rejected at the "
+        "identity-verification gate (the demo's stand-in for real auth). "
+        "See docs/DEMO_SCENARIOS.md for testable failure modes.[/dim]"
+    )
 
 
 @app.command()

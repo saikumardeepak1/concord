@@ -116,15 +116,79 @@ def _allow_refund(ctx: CustomerContext, args: dict[str, Any]) -> PermissionResul
     daily = _mock_backend.daily_refund_total(ctx.customer_id) + amount
     if daily > 500:
         return PermissionResult(False, "daily refund cap ($500) would be exceeded")
+    # The transaction_id must reference a real charge on this customer. The
+    # specialist is required to call lookup_transaction first and pass the
+    # returned ID here; this prevents refunds for charges that do not exist.
+    tx_id = args.get("transaction_id")
+    if not tx_id:
+        return PermissionResult(False, "transaction_id required: call lookup_transaction first")
+    from concord.customers import get_directory
+    directory = get_directory()
+    txns = [t for t in directory.find_transactions(ctx.customer_id) if t.transaction_id == tx_id]
+    if not txns:
+        return PermissionResult(False, f"transaction_id {tx_id!r} does not exist on this customer's account")
+    txn = txns[0]
+    if abs(txn.amount_usd - amount) > 0.01:
+        return PermissionResult(
+            False,
+            f"refund amount ${amount:.2f} does not match charge amount ${txn.amount_usd:.2f}",
+        )
     return PermissionResult(True)
 
 
 async def _do_refund(ctx: CustomerContext, args: dict[str, Any]) -> dict[str, Any]:
-    return _mock_backend.add_refund(
+    record = _mock_backend.add_refund(
         customer_id=ctx.customer_id,
         amount_usd=float(args["amount_usd"]),
         reason=args.get("reason", "customer support refund"),
     )
+    record["against_transaction_id"] = args.get("transaction_id")
+    return record
+
+
+# ----------------------- lookup tools (low-impact, read-only) -----------------------
+
+
+def _allow_lookup(ctx: CustomerContext, args: dict[str, Any]) -> PermissionResult:
+    # Read-only on an already-verified customer; no further gating.
+    return PermissionResult(True)
+
+
+async def _do_lookup_account(ctx: CustomerContext, args: dict[str, Any]) -> dict[str, Any]:
+    from concord.customers import get_directory
+    directory = get_directory()
+    try:
+        rec = directory.verify(ctx.customer_id)
+    except Exception as exc:
+        return {"error": str(exc)}
+    return {
+        "customer_id": rec.customer_id,
+        "plan": rec.plan,
+        "account_status": rec.account_status,
+        "tenure_days": rec.tenure_days,
+        "transaction_count": len(rec.transactions),
+        "most_recent_transaction": (
+            rec.transactions[0].to_dict() if rec.transactions else None
+        ),
+    }
+
+
+async def _do_lookup_transaction(ctx: CustomerContext, args: dict[str, Any]) -> dict[str, Any]:
+    from concord.customers import get_directory
+    directory = get_directory()
+    within = int(args.get("within_days", 30))
+    amount = args.get("approximate_amount_usd")
+    txns = directory.find_transactions(
+        ctx.customer_id,
+        within_days=within,
+        approximate_amount_usd=float(amount) if amount is not None else None,
+    )
+    return {
+        "matched_count": len(txns),
+        "transactions": [t.to_dict() for t in txns],
+        "lookup_window_days": within,
+        "filter_amount_usd": amount,
+    }
 
 
 def _allow_password_reset(ctx: CustomerContext, args: dict[str, Any]) -> PermissionResult:
@@ -189,22 +253,67 @@ async def _do_create_ticket(ctx: CustomerContext, args: dict[str, Any]) -> dict[
 
 
 _TOOLS: dict[str, Tool] = {
+    "lookup_account": Tool(
+        name="lookup_account",
+        description=(
+            "Read-only: return the verified customer's plan, status, tenure, "
+            "and most recent transaction. Call this when you need to ground "
+            "your reasoning in real account state instead of trusting the "
+            "customer's claim."
+        ),
+        intent_scope=("billing", "technical", "account"),
+        impact="low",
+        arguments_schema={
+            "type": "object",
+            "properties": {},
+            "required": [],
+            "additionalProperties": False,
+        },
+        permission=_allow_lookup,
+        handler=_do_lookup_account,
+    ),
+    "lookup_transaction": Tool(
+        name="lookup_transaction",
+        description=(
+            "Read-only: search the customer's transactions for a charge "
+            "matching the given approximate amount within the last N days. "
+            "Returns the real transaction records (with transaction_id) that "
+            "match, or an empty list if no such charge exists. ALWAYS call "
+            "this before proposing issue_refund; the returned transaction_id "
+            "is required to issue a refund."
+        ),
+        intent_scope=("billing",),
+        impact="low",
+        arguments_schema={
+            "type": "object",
+            "properties": {
+                "approximate_amount_usd": {"type": "number", "minimum": 0.01},
+                "within_days": {"type": "integer", "minimum": 1, "maximum": 365},
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+        permission=_allow_lookup,
+        handler=_do_lookup_transaction,
+    ),
     "issue_refund": Tool(
         name="issue_refund",
         description=(
-            "Issue a refund to the customer. Use only when the customer is "
-            "within the documented refund window OR there is a confirmed "
-            "billing error. Amount must be positive USD."
+            "Issue a refund against a specific transaction. You MUST first "
+            "call lookup_transaction to obtain the transaction_id. The amount "
+            "must match the charge amount. Refunds without a real "
+            "transaction_id are rejected by the permission predicate."
         ),
         intent_scope=("billing",),
         impact="high",
         arguments_schema={
             "type": "object",
             "properties": {
+                "transaction_id": {"type": "string", "minLength": 3},
                 "amount_usd": {"type": "number", "minimum": 0.01, "maximum": 1000},
                 "reason": {"type": "string", "minLength": 3},
             },
-            "required": ["amount_usd", "reason"],
+            "required": ["transaction_id", "amount_usd", "reason"],
             "additionalProperties": False,
         },
         permission=_allow_refund,
