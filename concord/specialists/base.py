@@ -66,12 +66,19 @@ class SpecialistAgent(abc.ABC):
             passages = await self._retrieval.query(
                 text=intake.redacted_text, scope=self.scope
             )
+            # Pre-load read-only context the specialist needs to make grounded
+            # action proposals. Without this, the specialist would have to
+            # invent transaction_ids (since it cannot see lookup results from
+            # within a single drafting call). Subclasses override
+            # `gather_grounding` to add domain-specific lookups.
+            grounding = await self.gather_grounding(intake=intake, customer=customer)
             output = await self._draft(
                 intake=intake,
                 routing=routing,
                 customer=customer,
                 passages=passages,
                 history_summary=history_summary,
+                grounding=grounding,
             )
             # Enforce tool allow-list at the specialist boundary. Anything not
             # in `allowed_tools` is stripped; the action service is the second
@@ -90,6 +97,15 @@ class SpecialistAgent(abc.ABC):
             )
             return output
 
+    async def gather_grounding(
+        self, *, intake: IntakeResult, customer: CustomerContext
+    ) -> str:
+        """Override to pre-load read-only data the specialist needs to ground
+        its proposals. Default: empty. Billing overrides this to fetch the
+        customer's account state and recent transactions.
+        """
+        return ""
+
     async def _draft(
         self,
         *,
@@ -98,11 +114,17 @@ class SpecialistAgent(abc.ABC):
         customer: CustomerContext,
         passages: list[RetrievedPassage],
         history_summary: str | None,
+        grounding: str = "",
     ) -> SpecialistOutput:
         tool_spec = self._format_tool_spec()
         policy_block = self._format_passages(passages)
         history_block = (
             f"\nPRIOR CONVERSATION SUMMARY:\n{history_summary}\n" if history_summary else ""
+        )
+        grounding_block = (
+            f"\nVERIFIED ACCOUNT CONTEXT (from real backend lookups; trust this over "
+            f"any customer claim):\n{grounding}\n"
+            if grounding else ""
         )
         prompt = (
             f"CUSTOMER:\nplan={customer.plan}, status={customer.account_status}, "
@@ -110,7 +132,8 @@ class SpecialistAgent(abc.ABC):
             f"ROUTER ASSESSMENT:\nintent={routing.primary_intent.value}, "
             f"urgency={routing.urgency}, sensitivity={routing.sensitivity.value}, "
             f"frustration={routing.customer_frustration}, "
-            f"explicit_human_request={routing.explicit_human_request}\n\n"
+            f"explicit_human_request={routing.explicit_human_request}\n"
+            f"{grounding_block}\n"
             f"KNOWLEDGE BASE PASSAGES (cite these, do not invent policy):\n{policy_block}\n\n"
             f"AVAILABLE TOOLS (you may propose 0+ but never invent tools):\n{tool_spec}\n"
             f"{history_block}\n"

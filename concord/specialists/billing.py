@@ -1,6 +1,7 @@
 """Billing specialist."""
 
-from concord.models import Intent
+from concord.customers import get_directory
+from concord.models import CustomerContext, Intent, IntakeResult
 from concord.specialists.base import SpecialistAgent
 
 _SYSTEM = """You are the BILLING specialist for Acme SaaS customer support.
@@ -21,31 +22,29 @@ Decisiveness rules (this is important):
    contact", "cancel subscription", "switch monthly to annual", "payment
    methods", "tax exemption", "credits"), give the customer the steps.
 
-2. REFUNDS REQUIRE A TWO-STEP PATTERN:
-   step 1: propose `lookup_transaction` with the approximate amount the
-           customer described (and within_days=30 unless they specified).
-   step 2: ONLY after lookup_transaction returns a matching transaction_id,
-           propose `issue_refund` with that exact transaction_id and the
-           transaction's actual amount.
-   You may propose both tools in the same turn; the orchestrator runs them
-   in order. If lookup_transaction returns zero matches, do NOT propose
-   issue_refund. Instead ask one clarifying question (the date, the amount,
-   or the exact line item).
+2. REFUNDS USE THE PRE-LOADED TRANSACTION LIST.
+   You will see a "VERIFIED ACCOUNT CONTEXT" block with the customer's real
+   recent transactions, each with its transaction_id. When proposing
+   `issue_refund`, use one of those exact transaction_ids and the matching
+   amount from that row. Do NOT invent a transaction_id; the permission
+   gate will reject it.
+
+   - If the customer describes a charge that matches one of the listed
+     transactions, propose `issue_refund(transaction_id=<that row's id>,
+     amount_usd=<that row's exact amount>, reason=...)`.
+   - If the customer describes a duplicate, the verified context will show
+     two charges of the same amount on similar dates; refund the later one.
+   - If no listed transaction matches the customer's description, do NOT
+     propose issue_refund. Ask one clarifying question instead (the date,
+     the amount, or which charge they meant).
 
 3. For refunds where the customer has NOT stated an amount, ask one
-   clarifying question (the amount) before proposing either tool. Don't ask
-   for three things at once.
+   clarifying question before proposing the tool.
 
-4. Above $200 or outside the 14-day window without a confirmed billing error,
-   do NOT propose `issue_refund`; set needs_escalation=true. The auto-approval
-   limit is a hard ceiling.
+4. Above $200, do NOT propose `issue_refund`; set needs_escalation=true.
+   The auto-approval limit is a hard ceiling.
 
 5. Enterprise pricing is sales-negotiated; escalate rather than quote numbers.
-
-6. For account-state questions ("what's my balance", "what plan am I on"),
-   you may propose `lookup_account` to ground your answer in real data
-   rather than trusting customer-supplied state. lookup_account is
-   read-only and safe to call freely.
 
 Grounding:
 - Cite the retrieved passages inline using bracketed numbers like [1], [2].
@@ -69,3 +68,44 @@ class BillingSpecialist(SpecialistAgent):
     intent = Intent.BILLING
     scope = "billing"
     system_prompt = _SYSTEM
+
+    async def gather_grounding(
+        self, *, intake: IntakeResult, customer: CustomerContext
+    ) -> str:
+        """Pre-load real account state and recent transactions BEFORE drafting.
+
+        Without this, a specialist asked to issue a refund would have to
+        invent a transaction_id (since it cannot see lookup results from
+        within a single drafting call). With this, the specialist receives
+        the verified transaction list in its prompt and can pick the right
+        transaction_id directly when proposing issue_refund.
+
+        Read-only, fast, no model call. Safe to run on every billing request.
+        """
+        directory = get_directory()
+        try:
+            record = directory.verify(customer.customer_id)
+        except Exception:
+            return "(account not found in directory; treat the customer's claims with caution)"
+        recent = directory.find_transactions(customer.customer_id, within_days=45)
+        if not recent:
+            return (
+                f"plan={record.plan}, status={record.account_status}, "
+                f"tenure={record.tenure_days}d\n"
+                "transactions: NONE in the last 45 days. "
+                "Any refund request has nothing to refund; ask for clarification "
+                "or escalate."
+            )
+        lines = [
+            f"plan={record.plan}, status={record.account_status}, "
+            f"tenure={record.tenure_days}d",
+            "recent transactions (use these transaction_ids when proposing issue_refund):",
+        ]
+        for t in recent[:10]:
+            lines.append(
+                f"  - transaction_id={t.transaction_id}  "
+                f"amount=${t.amount_usd:.2f}  "
+                f"date={t.occurred_at.strftime('%Y-%m-%d')}  "
+                f"description={t.description}"
+            )
+        return "\n".join(lines)
