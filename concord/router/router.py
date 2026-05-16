@@ -43,11 +43,26 @@ make it an account-category question):
 Multi-intent detection: if the message contains more than one distinct ask,
 populate `secondary_intents` with the others (most-important first).
 
-Sensitivity tags (use whichever applies, else none):
-- legal: any mention of legal action, GDPR/data deletion as a right, compliance
-- security: account compromise, breach, leaked data, suspicious activity
-- churn_risk: cancellation threat, frustration about leaving, "switching to"
-- billing_dispute: chargeback, unauthorized charge, refund refused
+Sensitivity tags (use whichever applies, else none). These tags trigger
+hard escalation, so be conservative; only tag when the case GENUINELY
+needs a human regardless of what the agent could otherwise do.
+
+- legal: explicit legal action ("I'm suing", "consulting my lawyer"),
+  GDPR / CCPA right-to-be-forgotten, regulatory compliance issues.
+- security: account compromise, breach, leaked credentials, suspicious
+  activity the customer is reporting.
+- churn_risk: explicit cancellation threat or comparison ("switching to
+  competitor", "we're cancelling unless"). Just being unhappy is not churn.
+- billing_dispute: ONLY use for ADVERSARIAL billing situations, NOT for
+  routine refund requests. Tag this when the customer is:
+    - claiming a charge was unauthorized / fraudulent
+    - threatening or initiating a chargeback with their bank
+    - refusing to pay an invoice they consider invalid
+    - asserting they never agreed to the charge
+  Do NOT tag billing_dispute for cooperative cases like "you charged me
+  twice, please refund the duplicate" or "this charge looks wrong, can
+  you check it?" Those are normal refund requests with sensitivity=none;
+  the agent can resolve them.
 
 Other signals:
 - urgency: 1 routine, 2 normal, 3 timely, 4 blocking-work, 5 critical/outage
