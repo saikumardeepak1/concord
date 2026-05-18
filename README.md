@@ -239,6 +239,21 @@ concord evals --suite all --output results.json
 text, and pass/fail rationale. Add your own cases in [evals/cases/](evals/cases/)
 to grow the regression suite.
 
+## Deploy a live demo
+
+Two one-click paths shipped in `/deploy`:
+
+- **Hugging Face Spaces** (free, 16 GB RAM) — recommended for a portfolio
+  demo. The image, Space frontmatter, and step-by-step instructions are in
+  [deploy/README.md](deploy/README.md).
+- **Render** (free tier or $7/mo Starter for always-on with a custom
+  domain) — uses the `render.yaml` blueprint at the repo root.
+
+Both deploy the FastAPI backend plus the demo UI in one container. Set
+`ANTHROPIC_API_KEY` as a secret on whichever platform you choose. The
+embedding model is baked into the image so cold-start requests don't pay a
+network round trip.
+
 ## Run with Docker
 
 ```bash

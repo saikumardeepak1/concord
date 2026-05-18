@@ -1,0 +1,46 @@
+# Render blueprint — https://render.com/docs/blueprint-spec
+#
+# How to deploy:
+#   1. Push this repo to GitHub (already there).
+#   2. https://dashboard.render.com → New → Blueprint → connect this repo.
+#   3. Render reads this file, creates the service, builds the Dockerfile.
+#   4. Add ANTHROPIC_API_KEY in the Render dashboard (env vars → secret).
+#   5. The free plan sleeps after 15 min idle (30s cold start). Upgrade to
+#      the Starter plan ($7/mo) for always-on if you're demoing live.
+#
+# State note: this config uses /tmp for Chroma and SQLite, which is ephemeral
+# on Render. The KB re-indexes on each cold start (about 5 seconds for 51
+# chunks). Audit log and traces reset on restart — fine for a demo, not for
+# production. For production, replace /tmp with a Render persistent disk
+# (https://render.com/docs/disks) and the traces will survive restarts.
+
+services:
+  - type: web
+    name: concord
+    runtime: docker
+    plan: free
+    region: oregon
+    healthCheckPath: /healthz
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: CONCORD_HOST
+        value: "0.0.0.0"
+      - key: CONCORD_PORT
+        value: "8080"
+      - key: CONCORD_ENV
+        value: "production"
+      - key: CONCORD_LOG_LEVEL
+        value: "info"
+      - key: CONCORD_CHROMA_PATH
+        value: "/tmp/chroma"
+      - key: CONCORD_DB_URL
+        value: "sqlite+aiosqlite:////tmp/concord.db"
+      # Use the model cache baked into the image at build time. If you
+      # change the embedding model, rebuild the image so the cache repopulates.
+      - key: HF_HOME
+        value: "/opt/hf_cache"
+      - key: SENTENCE_TRANSFORMERS_HOME
+        value: "/opt/hf_cache"

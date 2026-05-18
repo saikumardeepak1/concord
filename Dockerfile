@@ -20,6 +20,13 @@ COPY web ./web
 RUN pip install --upgrade pip \
  && pip install .
 
+# Pre-download the embedding model into the image so cold-start requests
+# don't pay a 60 s network round trip on Render / HF Spaces. Cached under
+# /opt/hf_cache and referenced by SENTENCE_TRANSFORMERS_HOME below.
+ENV SENTENCE_TRANSFORMERS_HOME=/opt/hf_cache \
+    HF_HOME=/opt/hf_cache
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+
 ENV CONCORD_HOST=0.0.0.0 \
     CONCORD_PORT=8080
 
