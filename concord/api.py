@@ -10,6 +10,7 @@ Plus the demo web UI served at /.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import structlog
@@ -130,14 +131,45 @@ async def get_trace(trace_id: str) -> dict:
     return rec
 
 
-_WEB_DIR = Path(__file__).resolve().parent.parent / "web"
-if _WEB_DIR.exists():
+def _find_web_dir() -> Path | None:
+    """Locate the web/ directory across editable, source, and packaged installs.
+
+    Local dev with `pip install -e .` lives at `<repo>/concord/api.py` so the
+    relative-to-source path works. In production Docker the package is
+    installed into site-packages and `web/` sits at `/app/web` (the WORKDIR),
+    not next to the installed module. Check both, plus an env-var escape hatch.
+    """
+    env_dir = os.environ.get("CONCORD_WEB_DIR")
+    candidates = [
+        Path(env_dir) if env_dir else None,
+        Path.cwd() / "web",
+        Path(__file__).resolve().parent.parent / "web",
+        Path(__file__).resolve().parent / "web",
+        Path("/app/web"),
+    ]
+    for c in candidates:
+        if c is not None and c.exists() and (c / "index.html").exists():
+            return c
+    return None
+
+
+_WEB_DIR = _find_web_dir()
+if _WEB_DIR is not None:
+    _log.info("web_dir_resolved", path=str(_WEB_DIR))
     app.mount("/static", StaticFiles(directory=str(_WEB_DIR)), name="static")
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> HTMLResponse:
         index_html = _WEB_DIR / "index.html"
         return HTMLResponse(index_html.read_text(encoding="utf-8"))
+else:
+    _log.warning("web_dir_not_found", searched=[
+        os.environ.get("CONCORD_WEB_DIR"),
+        str(Path.cwd() / "web"),
+        str(Path(__file__).resolve().parent.parent / "web"),
+        str(Path(__file__).resolve().parent / "web"),
+        "/app/web",
+    ])
 
 
 @app.exception_handler(Exception)
