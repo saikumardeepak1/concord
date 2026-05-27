@@ -7,7 +7,7 @@ sdk: docker
 app_port: 8080
 pinned: false
 license: mit
-short_description: Production-shaped multi-agent customer support with governed actions.
+short_description: Multi-agent customer support with governed safety gates.
 ---
 
 # Concord
