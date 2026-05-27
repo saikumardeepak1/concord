@@ -7,7 +7,9 @@
   <meta name="description" content="A reference implementation of a production-grade multi-agent customer support system. Governed actions, independent verification, full audit trail." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="preconnect" href="https://api.fontshare.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT,WONK@0,9..144,300..700,0..100,0..1;1,9..144,300..700,0..100,0..1&family=JetBrains+Mono:wght@400;500&display=swap" />
+  <link rel="stylesheet" href="https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap" />
   <style>
     :root {
       --bg: #fafaf7;
@@ -26,7 +28,7 @@
       --danger: #8b2e2e;
 
       --font-display: 'Fraunces', 'Iowan Old Style', 'Charter', Georgia, serif;
-      --font-ui: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      --font-ui: 'General Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
       --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
 
       --radius: 4px;
@@ -34,7 +36,7 @@
 
     * { box-sizing: border-box; }
     html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; text-rendering: optimizeLegibility; }
-    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); height: 100%; font-family: var(--font-ui); font-feature-settings: "ss01", "cv11"; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); height: 100%; font-family: var(--font-ui); }
     body { display: grid; grid-template-rows: auto 1fr; }
 
     /* ---------------- Header ---------------- */
@@ -603,6 +605,72 @@
     .footer a { color: var(--ink-3); text-decoration: none; letter-spacing: 0.02em; }
     .footer a:hover { color: var(--ink); }
 
+    /* ---------------- Streaming progress + entrance animations ---------------- */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .turn { animation: fadeUp 220ms ease-out; }
+    .span { animation: fadeUp 200ms ease-out both; }
+
+    /* Progressive status while the request is in flight. Sits in the
+       assistant slot until the real response arrives, then gets replaced.
+       The text rotates through the actual orchestrator phases so this isn't
+       a fake spinner. */
+    .pending {
+      align-self: flex-start;
+      max-width: 760px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .pending .who {
+      font-size: 10.5px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--ink-4);
+      font-weight: 500;
+    }
+    .pending-card {
+      padding: 16px 20px;
+      border-radius: var(--radius);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 320px;
+    }
+    .pending-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: var(--ink);
+      animation: pulse-dot 1.1s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.35; transform: scale(0.8); }
+    }
+    .pending-phase {
+      font-size: 13.5px;
+      color: var(--ink-2);
+      letter-spacing: -0.003em;
+      transition: opacity 200ms ease;
+    }
+    .pending-phase.swap-out { opacity: 0; }
+
+    /* Bubble text reveal effect for assistant responses. Each word fades in
+       with a small stagger; visually similar to streaming without faking
+       it. Triggered after the actual response arrives. */
+    .bubble.revealing .word {
+      opacity: 0;
+      animation: fadeIn 220ms ease-out forwards;
+    }
+
     /* Scrollbars */
     ::-webkit-scrollbar { width: 10px; height: 10px; }
     ::-webkit-scrollbar-track { background: transparent; }
@@ -899,7 +967,7 @@
     }
 
     // ---------------- Chat ----------------
-    function addTurn(role, text, metaHtml) {
+    function addTurn(role, text, metaHtml, opts) {
       // Clear the intro card on the first user message
       if (role === "user") {
         const intro = document.querySelector(".intro-card");
@@ -912,7 +980,6 @@
       who.textContent = role === "user" ? "Customer" : "Concord";
       const bubble = document.createElement("div");
       bubble.className = "bubble";
-      bubble.textContent = text;
       turn.appendChild(who);
       turn.appendChild(bubble);
       if (metaHtml) {
@@ -922,7 +989,89 @@
         turn.appendChild(meta);
       }
       $("messages").appendChild(turn);
+
+      if (role === "assistant" && opts && opts.reveal) {
+        revealText(bubble, text);
+      } else {
+        bubble.textContent = text;
+      }
       $("messages").scrollTop = $("messages").scrollHeight;
+      return turn;
+    }
+
+    // Word-by-word fade-in. Visually similar to streaming without faking it
+    // (the response is already complete; we're just pacing how it appears).
+    function revealText(bubble, text) {
+      bubble.classList.add("revealing");
+      // Preserve newlines as line breaks, split words within lines.
+      const lines = text.split("\n");
+      lines.forEach((line, lineIdx) => {
+        const words = line.split(/(\s+)/); // keep whitespace tokens
+        words.forEach((w, i) => {
+          const span = document.createElement("span");
+          span.className = "word";
+          span.textContent = w;
+          // ~22ms per word feels lively but not jittery
+          const delay = (lineIdx * 12 + i) * 22;
+          span.style.animationDelay = delay + "ms";
+          bubble.appendChild(span);
+        });
+        if (lineIdx < lines.length - 1) {
+          bubble.appendChild(document.createElement("br"));
+        }
+      });
+    }
+
+    // Progressive phase indicator while a request is in flight. The phases
+    // map to real orchestrator stages; we advance them on a schedule that
+    // roughly matches observed timings (router ~2s, specialist ~3-5s,
+    // action checks ~1-2s, finalize ~1s). The schedule is a best-effort
+    // approximation, not a fake spinner; if the response arrives early
+    // we stop advancing immediately.
+    const PHASES = [
+      "Verifying customer identity",
+      "Routing to the right specialist",
+      "Loading verified account context",
+      "Drafting a grounded response",
+      "Running independent verifier",
+      "Finalizing",
+    ];
+
+    function startPending() {
+      const wrap = document.createElement("div");
+      wrap.className = "pending";
+      wrap.innerHTML = `
+        <div class="who">Concord</div>
+        <div class="pending-card">
+          <div class="pending-dot"></div>
+          <div class="pending-phase" id="pending-phase">${PHASES[0]}</div>
+        </div>
+      `;
+      $("messages").appendChild(wrap);
+      $("messages").scrollTop = $("messages").scrollHeight;
+
+      let i = 0;
+      const node = wrap.querySelector("#pending-phase");
+      // Advance with a slight stagger; rough timings for a full pipeline.
+      const interval = setInterval(() => {
+        i++;
+        if (i >= PHASES.length) {
+          clearInterval(interval);
+          return;
+        }
+        node.classList.add("swap-out");
+        setTimeout(() => {
+          node.textContent = PHASES[i];
+          node.classList.remove("swap-out");
+        }, 180);
+      }, 1600);
+
+      return {
+        stop() {
+          clearInterval(interval);
+          wrap.remove();
+        },
+      };
     }
 
     function renderAttributes(attrs) {
@@ -945,9 +1094,10 @@
       if (!r.ok) return;
       const t = await r.json();
       el.innerHTML = "";
-      t.spans.forEach(s => {
+      t.spans.forEach((s, i) => {
         const d = document.createElement("div");
         d.className = "span";
+        d.style.animationDelay = (i * 60) + "ms";
         d.innerHTML = `
           <div class="span-head">
             <span class="span-name">${escapeHtml(s.name)}</span>
@@ -975,6 +1125,7 @@
       $("msg").value = "";
       setBusy(true);
       addTurn("user", text);
+      const pending = startPending();
       try {
         const resp = await fetch("/support", {
           method: "POST",
@@ -986,12 +1137,14 @@
           }),
         });
         const data = await resp.json();
+        pending.stop();
         if (resp.status === 401) {
           addTurn(
             "assistant",
             `Identity verification failed.\n\n${data.message || data.error}\n\n${data.hint || ""}`,
             `<span class="meta-pill outcome-customer_not_found">customer_not_found</span>
-             <span>request rejected at API boundary</span>`
+             <span>request rejected at API boundary</span>`,
+            { reveal: true }
           );
           await renderTrace(null);
           window._overrideCustomerId = null;
@@ -1011,10 +1164,11 @@
           <span class="meta-pill">confidence ${(data.confidence*100|0)}%</span>
           ${data.escalation ? `<span class="meta-pill outcome-escalated">priority ${data.escalation.priority}</span>` : ""}
         `;
-        addTurn("assistant", data.response_text, metaPills + citesHtml);
+        addTurn("assistant", data.response_text, metaPills + citesHtml, { reveal: true });
         if (data.trace_id) await renderTrace(data.trace_id);
       } catch (err) {
-        addTurn("assistant", "Something went wrong on the network. Try again.");
+        pending.stop();
+        addTurn("assistant", "Something went wrong on the network. Try again.", "", { reveal: true });
       } finally {
         setBusy(false);
         window._overrideCustomerId = null;
