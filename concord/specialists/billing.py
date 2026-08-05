@@ -1,7 +1,7 @@
 """Billing specialist."""
 
 from concord.customers import get_directory
-from concord.models import CustomerContext, Intent, IntakeResult
+from concord.models import CustomerContext, IntakeResult, Intent
 from concord.specialists.base import SpecialistAgent
 
 _SYSTEM = """You are the BILLING specialist for Acme SaaS customer support.
