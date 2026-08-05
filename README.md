@@ -37,38 +37,34 @@ docs/               architecture overview, runbook, ADRs
 
 ## The architecture in one diagram
 
-```
-                                                ┌───────────────────┐
-                                                │  Knowledge base   │
-                                                │  (markdown docs)  │
-                                                └────────┬──────────┘
-                                                         │ chunk + embed
-                                                         ▼
-   ┌────────┐    ┌────────┐    ┌────────────┐    ┌──────────────┐
- ──▶ Intake ├───▶ Router ├───▶ Specialist  ├───▶│  Retrieval   │
-   │  PII   │    │ fast   │    │  scoped    │    │  (Chroma)    │
-   └────────┘    └───┬────┘    └──────┬─────┘    └──────────────┘
-                    │                  │
-                    │ explicit human / │ proposes action
-                    │ sensitive case   ▼
-                    ▼            ┌──────────────────────────────────┐
-              ┌──────────┐       │   Action Service                  │
-              │Escalation│◀──────┤   ① schema validate                │
-              │  Gate    │       │   ② permission predicate          │
-              └────┬─────┘       │   ③ INDEPENDENT verification pass │
-                   │             │   ④ idempotency check             │
-                   ▼             │   ⑤ execute with timeout          │
-              human queue        │   ⑥ append-only audit log         │
-                                  └──────────────────────────────────┘
-                                                │
-                                                ▼
-                                        ┌──────────────┐
-                                        │  Synthesis   │
-                                        │ leakage scrub│
-                                        └──────┬───────┘
-                                                ▼
-                                      customer response
-                                      + structured trace
+```mermaid
+graph TB
+    Request["Inbound customer request"] --> Intake["Intake<br/>normalize, detect and redact PII"]
+    Intake --> Router["Router<br/>fast classifier: intent,<br/>sensitivity, urgency"]
+
+    KB["Knowledge base<br/>(markdown docs)"] -->|"chunk + embed"| Retrieval[("Retrieval<br/>Chroma")]
+
+    Router -->|"routine case"| Specialist["Specialist agent<br/>billing / technical / account<br/>scoped tools + scoped KB"]
+    Router -->|"explicit human request<br/>or sensitive case"| Gate["Escalation Gate<br/>hybrid confidence + rules"]
+
+    Specialist -->|"grounds answer"| Retrieval
+    Specialist -->|"proposes action"| Actions["Action Service"]
+
+    subgraph Actions_detail["Action Service: every state change passes all six"]
+        A1["1. schema validate"] --> A2["2. permission predicate"]
+        A2 --> A3["3. independent verification pass"]
+        A3 --> A4["4. idempotency check"]
+        A4 --> A5["5. execute with timeout"]
+        A5 --> A6["6. append-only audit log"]
+    end
+
+    Actions --> Actions_detail
+    Actions_detail -->|"denied or low confidence"| Gate
+    Gate --> Human["Human queue"]
+
+    Actions_detail --> Synthesis["Synthesis<br/>leakage scrub, tone normalization"]
+    Specialist --> Synthesis
+    Synthesis --> Out["Customer response<br/>+ structured trace"]
 ```
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full walkthrough and
